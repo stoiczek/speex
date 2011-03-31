@@ -152,6 +152,7 @@ struct SpeexEchoState_ {
    spx_word16_t *input;  /* scratch */
    spx_word16_t *y;      /* scratch */
    spx_word16_t *last_y;
+   spx_word16_t *last_echo; /* last echo frame */
    spx_word16_t *Y;      /* scratch */
    spx_word16_t *E;
    spx_word32_t *PHI;    /* scratch */
@@ -448,6 +449,7 @@ EXPORT SpeexEchoState *speex_echo_state_init_mc(int frame_size, int filter_lengt
    st->input = (spx_word16_t*)speex_alloc(C*st->frame_size*sizeof(spx_word16_t));
    st->y = (spx_word16_t*)speex_alloc(C*N*sizeof(spx_word16_t));
    st->last_y = (spx_word16_t*)speex_alloc(C*N*sizeof(spx_word16_t));
+   st->last_echo = (spx_word16_t*)speex_alloc(C*N*sizeof(spx_word16_t));
    st->Yf = (spx_word32_t*)speex_alloc((st->frame_size+1)*sizeof(spx_word32_t));
    st->Rf = (spx_word32_t*)speex_alloc((st->frame_size+1)*sizeof(spx_word32_t));
    st->Xf = (spx_word32_t*)speex_alloc((st->frame_size+1)*sizeof(spx_word32_t));
@@ -595,6 +597,7 @@ EXPORT void speex_echo_state_destroy(SpeexEchoState *st)
    speex_free(st->input);
    speex_free(st->y);
    speex_free(st->last_y);
+   speex_free(st->last_echo);
    speex_free(st->Yf);
    speex_free(st->Rf);
    speex_free(st->Xf);
@@ -985,6 +988,9 @@ EXPORT void speex_echo_cancellation(SpeexEchoState *st, const spx_int16_t *in, c
          st->memE[chan] = tmp_out;
       }
 
+      /* Save last echo frame */
+      memcpy(st->last_echo, &st->e[chan*N+st->frame_size], st->frame_size*sizeof(*st->last_echo));
+
 #ifdef DUMP_ECHO_CANCEL_DATA
       dump_audio(in, far_end, out, st->frame_size);
 #endif
@@ -1277,6 +1283,22 @@ EXPORT int speex_echo_ctl(SpeexEchoState *st, int request, void *ptr)
          }
       }
          break;
+      case SPEEX_ECHO_GET_LAST_ECHO_FRAME:
+      {
+          /*FIXME: Implement this for multiple channels */
+          int i;
+          spx_int16_t *last_echo = (short*) ptr;
+          for (i = 0; i < st->frame_size; i++)
+          {
+              spx_word16_t a = st->last_echo[i];
+              if (a > 32767)
+                  a = 32767;
+              else if (a < -32767)
+                  a = -32767;
+              last_echo[i] = (spx_int16_t)a;
+          }
+          break;
+      }
       default:
          speex_warning_int("Unknown speex_echo_ctl request: ", request);
          return -1;
